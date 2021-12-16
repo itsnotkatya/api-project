@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\User;
 use App\Repository\TaskRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -27,10 +28,18 @@ class Task implements \JsonSerializable
      */
     private $Status;
 
+
     /**
      * @ORM\Column(type="string", length=10)
      */
     private $Date;
+
+    /**
+     * @ORM\ManyToOne(targetEntity=User::class)
+     * @ORM\JoinColumn(nullable=false)
+     */
+    private $User;
+
 
     public function getId(): ?int
     {
@@ -80,5 +89,17 @@ class Task implements \JsonSerializable
             "date" => $this->getDate(),
             "text" => $this->getText()
         ];
+    }
+
+    public function getUser(): ?string
+    {
+        return $this->User;
+    }
+
+    public function setUser(string $User): self
+    {
+        $this->User = $User;
+
+        return $this;
     }
 }
