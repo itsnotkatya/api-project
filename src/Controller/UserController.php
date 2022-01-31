@@ -2,46 +2,72 @@
 
 namespace App\Controller;
 
-use App\Entity\User;
+use App\Form\UserType;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use JsonException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactoryInterface;
 use Symfony\Component\Routing\Annotation\Route;
-use App\Repository\UserRepository;
 use App\Traits\HelperTrait;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 #[Route('/user', name: 'user')]
-class UserController extends AbstractController
+class UserController extends AbstractAPIController
 {
     use HelperTrait;
 
     /**
+     * @var EntityManagerInterface
+     */
+    private EntityManagerInterface $entityManager;
+
+    /**
+     * @param EntityManagerInterface $entityManager
+     */
+    public function __construct(EntityManagerInterface $entityManager)
+    {
+        $this->entityManager = $entityManager;
+    }
+
+    /**
      * @param Request $request
      * @param UserPasswordHasherInterface $passwordEncoder
-     * @return \Symfony\Component\HttpFoundation\JsonResponse
-     * @Route("/user", methods={"POST"})
+     *
+     * @return JsonResponse
+     *
+     * @throws JsonException
      */
-    #[Route (name: "Add", methods: ['POST'])]
-    public function addUser (Request $request, UserPasswordHasherInterface $passwordEncoder) {
-        $request = $this->transformJsonBody($request); //приняли запрос и трпнсформировали тело в json
-        $user = new User();
-        $user->setName($request->get("name"));
-        $user->setLogin($request->get("login"));
+    #[Route ('/register', name: "register", methods: ['POST'])]
+    public function registerUserAction (Request $request, PasswordHasherFactoryInterface $hasherFactory): JsonResponse
+    {
+        $user = $this->handleForm($this->createForm(UserType::class), json_decode($request->getContent(), true));
+
         $user->setPassword(
-            $passwordEncoder->hashPassword($user, $request->get("password"))
+            $hasherFactory->getPasswordHasher($user)->hash($user->getPassword())
         );
 
-        $em = $this->getDoctrine()->getManager();
-        $em->persist($user);
-        $em->flush();   //добавили в БД
+        $this->entityManager->persist($user);
+        $this->entityManager->flush();
 
         $data = [
             "data" => Response::HTTP_OK,
-            "message" => "User added successfully",
+            "message" => "UserRegistered",
         ];
+
         return $this->response($data);
+    }
+
+    /**
+     * @param UserInterface $user
+     * @param JWTTokenManagerInterface $JWTManager
+     * @return JsonResponse
+     */
+    public function getTokenUser(UserInterface $user, JWTTokenManagerInterface $JWTManager)
+    {
+        return new JsonResponse(['token' => $JWTManager->create($user)]);
     }
 }
