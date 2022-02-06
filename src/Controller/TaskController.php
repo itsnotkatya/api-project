@@ -2,35 +2,57 @@
 
 namespace App\Controller;
 
-use App\Repository\UserRepository;
-use App\Repository\TaskRepository;
+use App\Entity\Task;
+use App\Entity\User;
+use App\Exception\API\APIException;
+use App\Form\TaskType;
 use App\Traits\HelperTrait;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Exception;
 
-#[Route('/task', name: 'task')]
-class TaskController extends AbstractController
+#[Route('/task', name: 'task_')]
+class TaskController extends AbstractAPIController
 {
     use HelperTrait;
 
-    #[Route (name: "Add", methods: ["POST"])]
-    public function addTask(Request $request, EntityManagerInterface $entityManager, TaskRepository $taskRepository)
-    {
-        try {
-            $request = $this->transformJsonBody($request);
+    /**
+     * @var EntityManagerInterface
+     */
+    private EntityManagerInterface $entityManager;
 
-            if (!$request || !$request->get('name') || !$request->request->get('description')) {
-                throw new Exception();
-            }
-            $post = new Post();
-            $post->setName($request->get('name'));
-            $post->setDescription($request->get('description'));
-            $entityManager->persist($post);
+    /**
+     * @param EntityManagerInterface $entityManager
+     */
+    public function __construct(EntityManagerInterface $entityManager)
+    {
+        $this->entityManager = $entityManager;
+    }
+
+    /**
+     * @throws APIException
+     * @throws \JsonException
+     */
+    #[Route (name: "Add", methods: ["POST"])]
+    public function addTask(Request $request, EntityManagerInterface $entityManager): JsonResponse
+    {
+        $request = $this->transformJsonBody($request);
+
+        /** @var Task $task */
+        $task = $this->handleForm(
+            $this->createForm(TaskType::class),
+            $request->request->all()
+        );
+
+        /** @var User $user */
+        $user = $this->getUser();
+
+        try {
+            $user->addTask($task);
+            $entityManager->persist($task);
             $entityManager->flush();
 
             $data = [
@@ -42,19 +64,20 @@ class TaskController extends AbstractController
         } catch (Exception $e){
             $data = [
                 'status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                'message' => "Data no valid",
+                'message' => "InvalidData",
             ];
             return $this->response($data, 422);
         }
-
     }
 
-    #[Route ('/{id}', name: "GetByUser", methods: ["GET"])]
-    public function getTasks(TaskRepository $taskRepository, $id, UserRepository $userRepository):JsonResponse
+    #[Route ('/list', name: "GetByUser", methods: ["GET"])]
+    public function getTasks(): JsonResponse
     {
         try{
-            $user = $userRepository->find($id);
-            $tasks = $taskRepository->findBy(['user'=>$user]);
+            /** @var User $user */
+            $user = $this->getUser();
+            $tasks = $user->getTasks();
+
             $data = [];
             foreach ($tasks as $task){
                 $data[] = [
@@ -64,6 +87,7 @@ class TaskController extends AbstractController
                     "date"=>$task->getDate()
                 ];
             }
+
             return $this->response($data);
         } catch (Exception $e){
             $data = [
@@ -72,48 +96,29 @@ class TaskController extends AbstractController
             ];
             return $this->response($data, 422);
         }
-        $data = $taskRepository->findAll();
-        return $this->response($data);
     }
 
-    #[Route ('/{id}', name: "Get", methods: ["GET"])]
-    public function getTask (TaskRepository $taskRepository, $id){
-        $post = $taskRepository->find($id);
-
-        if (!$post){
-            $data = [
-                'status' => 404,
-                'errors' => "Post not found",
-            ];
-            return $this->response($data, 404);
-        }
-        return $this->response($post);
+    #[Route ('/{task}', name: "Get", methods: ["GET"])]
+    public function getTask (Task $task): JsonResponse
+    {
+        return $this->response($task);
     }
 
 
-    #[Route ('/{id}',name: "Update", methods: ["PUT"])]
-    public function updateTask(Request $request, EntityManagerInterface $entityManager, TaskRepository $taskRepository, $id){
+    #[Route ('/{task}',name: "Update", methods: ["PUT"])]
+    public function updateTask(Request $request, Task $task): JsonResponse
+    {
 
+        $request = $this->transformJsonBody($request);
+
+        /** @var Task $task */
+        $task = $this->handleForm(
+            $this->createForm(TaskType::class, $task),
+            $request->request->all()
+        );
         try{
-            $post = $taskRepository->find($id);
-
-            if (!$post){
-                $data = [
-                    'status' => Response::HTTP_NOT_FOUND,
-                    'message' => "Task not found",
-                ];
-                return $this->response($data, 404);
-            }
-
-            $request = $this->transformJsonBody($request);
-
-            if (!$request || !$request->get('name') || !$request->request->get('description')){
-                throw new \Exception();
-            }
-
-            $post->setName($request->get('name'));
-            $post->setDescription($request->get('description'));
-            $entityManager->flush();
+            $this->entityManager->persist($task);
+            $this->entityManager->flush();
 
             $data = [
                 'status' => Response::HTTP_OK,
@@ -128,22 +133,12 @@ class TaskController extends AbstractController
             ];
             return $this->response($data, 422);
         }
-
     }
 
-    #[Route ('/{id}',name: "Delete", methods: ["DELETE"])]
-    public function deleteTask(EntityManagerInterface $entityManager, TaskRepository $taskRepository, $id){
-        $post = $taskRepository->find($id);
-
-        if (!$post){
-            $data = [
-                'status' => Response::HTTP_NOT_FOUND,
-                'message' => "Task not found",
-            ];
-            return $this->response($data, 404);
-        }
-
-        $entityManager->remove($post);
+    #[Route ('/{task}',name: "Delete", methods: ["DELETE"])]
+    public function deleteTask(EntityManagerInterface $entityManager, Task $task): JsonResponse
+    {
+        $entityManager->remove($task);
         $entityManager->flush();
         $data = [
             'status' => Response::HTTP_OK,

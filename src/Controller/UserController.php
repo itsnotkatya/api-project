@@ -2,17 +2,16 @@
 
 namespace App\Controller;
 
+use App\Exception\API\APIException;
 use App\Form\UserType;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
-use JsonException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactoryInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use App\Traits\HelperTrait;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 #[Route('/user', name: 'user')]
@@ -35,11 +34,11 @@ class UserController extends AbstractAPIController
 
     /**
      * @param Request $request
-     * @param UserPasswordHasherInterface $passwordEncoder
+     * @param PasswordHasherFactoryInterface $hasherFactory
      *
      * @return JsonResponse
      *
-     * @throws JsonException
+     * @throws APIException
      */
     #[Route ('/register', name: "register", methods: ['POST'])]
     public function registerUserAction (Request $request, PasswordHasherFactoryInterface $hasherFactory): JsonResponse
